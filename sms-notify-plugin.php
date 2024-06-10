@@ -29,6 +29,8 @@ function sms_notify_register_settings() {
     register_setting('sms_notify_options', 'sms_notify_username');
     register_setting('sms_notify_options', 'sms_notify_apikey');
     register_setting('sms_notify_options', 'sms_notify_usersender');
+    register_setting('sms_notify_options', 'sms_notify_order_statuses');
+    register_setting('sms_notify_options', 'sms_notify_message');
 }
 
 // Create the settings page
@@ -54,6 +56,24 @@ function sms_notify_settings_page() {
                     <th scope="row">User Sender</th>
                     <td><input type="text" name="sms_notify_usersender" value="<?php echo esc_attr(get_option('sms_notify_usersender')); ?>" /></td>
                 </tr>
+                <tr valign="top">
+                    <th scope="row">Order Statuses</th>
+                    <td>
+                        <select name="sms_notify_order_statuses[]" multiple style="height: 100px;">
+                            <?php
+                            $statuses = wc_get_order_statuses();
+                            $selected_statuses = get_option('sms_notify_order_statuses', []);
+                            foreach ($statuses as $status_key => $status_label) {
+                                echo '<option value="' . esc_attr($status_key) . '"' . (in_array($status_key, $selected_statuses) ? ' selected' : '') . '>' . esc_html($status_label) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Custom Message</th>
+                    <td><textarea name="sms_notify_message" rows="5" cols="50"><?php echo esc_textarea(get_option('sms_notify_message', 'عميل لفتة العزيز، تم شحن طلبك رقم {order_id} مع شركة Aramex تتبع الشحنة {track_url} رقم خدمة العملاء 966920033702 شكرا لكم')); ?></textarea></td>
+                </tr>
             </table>
             <?php submit_button(); ?>
         </form>
@@ -61,9 +81,16 @@ function sms_notify_settings_page() {
     <?php
 }
 
+// Send SMS on selected order statuses
+add_action('woocommerce_order_status_changed', 'on_order_status_changed', 10, 4);
+function on_order_status_changed($order_id, $old_status, $new_status, $order) {
+    $selected_statuses = get_option('sms_notify_order_statuses', []);
+    if (in_array('wc-' . $new_status, $selected_statuses)) {
+        send_sms_notification($order_id, $new_status);
+    }
+}
 
-add_action('woocommerce_order_status_on-hold', 'on_hold_sms', 10, 1);
-function on_hold_sms($order_id) {
+function send_sms_notification($order_id, $new_status) {
     // Retrieve the order details using the order ID
     $order = wc_get_order($order_id);
 
@@ -104,10 +131,17 @@ function on_hold_sms($order_id) {
     $username = get_option('sms_notify_username');
     $apikey = get_option('sms_notify_apikey');
     $usersender = get_option('sms_notify_usersender');
+    $custom_message = get_option('sms_notify_message');
+
+    // Replace placeholders in the custom message
+    $message = str_replace(
+        ['{order_id}', '{track_url}', '{new_status}'],
+        [$order_id, $track_url, wc_get_order_status_name($new_status)],
+        $custom_message
+    );
 
     // Prepare the data to send the SMS
     $url = "https://www.msegat.com/gw/";
-    $message = "عميل لفتة العزيز، تم شحن طلبك رقم {$order_id} مع شركةAramex تتبع الشحنة {$track_url} رقم خدمة العملاء 966920033702 شكرا لكم";
     $dataArray = array(
         "userName" => $username,
         "apiKey" => $apikey,
