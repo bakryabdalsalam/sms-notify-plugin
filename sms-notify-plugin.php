@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: SMS Notify Plugin
-Description: Send SMS to the customer and notify the admin when an order is placed on hold.
+Description: Send SMS to the customer and notify the admin when an order status changes.
 Version: 1.1
 Author: Bakry Abdalsalam
 */
@@ -29,7 +29,6 @@ function sms_notify_register_settings() {
     register_setting('sms_notify_options', 'sms_notify_username');
     register_setting('sms_notify_options', 'sms_notify_apikey');
     register_setting('sms_notify_options', 'sms_notify_usersender');
-    register_setting('sms_notify_options', 'sms_notify_order_statuses');
     $statuses = wc_get_order_statuses();
     foreach ($statuses as $status_key => $status_label) {
         register_setting('sms_notify_options', 'sms_notify_message_' . $status_key);
@@ -59,21 +58,8 @@ function sms_notify_settings_page() {
                     <th scope="row">User Sender</th>
                     <td><input type="text" name="sms_notify_usersender" value="<?php echo esc_attr(get_option('sms_notify_usersender')); ?>" /></td>
                 </tr>
-                <tr valign="top">
-                    <th scope="row">Order Statuses</th>
-                    <td>
-                        <select name="sms_notify_order_statuses[]" multiple style="height: 100px;">
-                            <?php
-                            $statuses = wc_get_order_statuses();
-                            $selected_statuses = get_option('sms_notify_order_statuses', []);
-                            foreach ($statuses as $status_key => $status_label) {
-                                echo '<option value="' . esc_attr($status_key) . '"' . (in_array($status_key, $selected_statuses) ? ' selected' : '') . '>' . esc_html($status_label) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </td>
-                </tr>
                 <?php
+                $statuses = wc_get_order_statuses();
                 foreach ($statuses as $status_key => $status_label) {
                     ?>
                     <tr valign="top">
@@ -90,13 +76,10 @@ function sms_notify_settings_page() {
     <?php
 }
 
-// Send SMS on selected order statuses
+// Send SMS on all order status changes
 add_action('woocommerce_order_status_changed', 'on_order_status_changed', 10, 4);
 function on_order_status_changed($order_id, $old_status, $new_status, $order) {
-    $selected_statuses = get_option('sms_notify_order_statuses', []);
-    if (in_array('wc-' . $new_status, $selected_statuses)) {
-        send_sms_notification($order_id, $new_status);
-    }
+    send_sms_notification($order_id, $new_status);
 }
 
 function send_sms_notification($order_id, $new_status) {
