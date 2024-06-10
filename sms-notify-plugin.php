@@ -2,7 +2,7 @@
 /*
 Plugin Name: SMS Notify Plugin
 Description: Send SMS to the customer and notify the admin when an order is placed on hold.
-Version: 1.0
+Version: 1.1
 Author: Bakry Abdalsalam
 */
 
@@ -30,7 +30,10 @@ function sms_notify_register_settings() {
     register_setting('sms_notify_options', 'sms_notify_apikey');
     register_setting('sms_notify_options', 'sms_notify_usersender');
     register_setting('sms_notify_options', 'sms_notify_order_statuses');
-    register_setting('sms_notify_options', 'sms_notify_message');
+    $statuses = wc_get_order_statuses();
+    foreach ($statuses as $status_key => $status_label) {
+        register_setting('sms_notify_options', 'sms_notify_message_' . $status_key);
+    }
 }
 
 // Create the settings page
@@ -70,10 +73,16 @@ function sms_notify_settings_page() {
                         </select>
                     </td>
                 </tr>
-                <tr valign="top">
-                    <th scope="row">Custom Message</th>
-                    <td><textarea name="sms_notify_message" rows="5" cols="50"><?php echo esc_textarea(get_option('sms_notify_message', 'عميل لفتة العزيز، تم شحن طلبك رقم {order_id} مع شركة Aramex تتبع الشحنة {track_url} رقم خدمة العملاء 966920033702 شكرا لكم')); ?></textarea></td>
-                </tr>
+                <?php
+                foreach ($statuses as $status_key => $status_label) {
+                    ?>
+                    <tr valign="top">
+                        <th scope="row"><?php echo esc_html($status_label); ?> Message</th>
+                        <td><textarea name="sms_notify_message_<?php echo esc_attr($status_key); ?>" rows="5" cols="50"><?php echo esc_textarea(get_option('sms_notify_message_' . $status_key, '')); ?></textarea></td>
+                    </tr>
+                    <?php
+                }
+                ?>
             </table>
             <?php submit_button(); ?>
         </form>
@@ -131,7 +140,7 @@ function send_sms_notification($order_id, $new_status) {
     $username = get_option('sms_notify_username');
     $apikey = get_option('sms_notify_apikey');
     $usersender = get_option('sms_notify_usersender');
-    $custom_message = get_option('sms_notify_message');
+    $custom_message = get_option('sms_notify_message_wc-' . $new_status);
 
     // Replace placeholders in the custom message
     $message = str_replace(
@@ -220,3 +229,4 @@ function on_hold_sms_error_notice() {
         delete_transient('on_hold_sms_error');
     }
 }
+?>
